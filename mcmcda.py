@@ -1,14 +1,15 @@
 import math
 import random
 import numpy as np
+import pickle
 
 IMG_WIDTH = 768
 IMG_HEIGHT = 576
 
-IMAGE_DIAG = math.sqrt(IMG_HEIGHT^2 + IMG_WIDTH^2)
+IMAGE_DIAG = math.sqrt(IMG_HEIGHT ** 2 + IMG_WIDTH ** 2)
 
-INTERACTION_VARIANCE = 100^2
-
+INTERACTION_VARIANCE = 100 ** 2
+DISTANCE_FACTOR = 25
 GAMMA = 0.2
 BETA = 1
 PHI = 1
@@ -44,7 +45,7 @@ def area_intersection(obj1, obj2):
 	x1, y1, x2, y2 = bounding_box_intersection(obj1, obj2)
 	return area_bounding_box(x1, y1, x2, y2)
 
-def mu(p1, p2)
+def mu(p1, p2):
 	a_i = area_intersection(p1, p2)
 	x1, y1, x2, y2 = get_bounding_box(p1)
 	a1, b1, a2, b2 = get_bounding_box(p2)
@@ -57,8 +58,8 @@ def mu(p1, p2)
 def p_pos(p1, p2):
 	x, y = get_centroid(p1)
 	a, b = get_centroid(p2)
-
-	return 1 / (math.sqrt((x - a)^2 + (y - b)^2))
+	print x, y, a, b, (x - a) ** 2 + (y - b) ** 2
+	return 1 / (math.sqrt((x - a) ** 2 + (y - b) ** 2) + DISTANCE_FACTOR)
 
 def p_l(p1, p2):
 	return mu(p1, p2) * p_pos(p1, p2)
@@ -68,7 +69,7 @@ def psi(p1, p2):
 	x, y = get_centroid(p1)
 	a, b = get_centroid(p2)
 
-	return 1 - (1 / BETA) * math.exp(-((x - a)^2 + (y - b)^2) / INTERACTION_VARIANCE)
+	return 1 - (1 / BETA) * math.exp(-((x - a) ** 2 + (y - b) ** 2) / INTERACTION_VARIANCE)
 
 def psi_multiplicative_sum(proposal):
 	# PROPOSAL FORMAT
@@ -94,8 +95,12 @@ def p_g(proposal):
 	return psi_multiplicative_sum(proposal) * p_appearance_phi()
 
 def a_ij(proposal, i, j):
+	print i, j, proposal
 	local_score = p_l(proposal[i][0], proposal[j][1])
 	global_score = p_g(proposal)
+
+	if abs(global_score + local_score) < 10e-10:
+		return 0
 
 	return global_score / (global_score + local_score)
 
@@ -130,15 +135,15 @@ def IMCMC(d, t):
 	for _ in xrange(iteration_N):
 
 		for i in xrange(lp):
-			p_l_distribution = np.array([p_l(p[i][0], p[j][1]) for j in xrange(lp)])
+			p_l_distribution = np.array([p_l(proposal[i][0], proposal[j][1]) for j in xrange(lp)])
 			p_l_distribution = p_l_distribution / sum(p_l_distribution)
 			p_l_values = range(lp)
 
-			j = np.random.choice(p_l_values, 1, p=p_l_distribution)
+			j = np.random.choice(p_l_values, 1, p=p_l_distribution)[0]
 
 			rand = random.random()
 			if rand < GAMMA:
-				rand_2 = rando.random()
+				rand_2 = random.random()
 				alpha = a_ij(proposal, i, j)
 
 				if rand_2 < alpha:
@@ -157,3 +162,10 @@ def metropolis_hastings(d):
 
 	for t in xrange(max_time):
 		proposals[t] = IMCMC(d, t)
+
+if __name__ == "__main__":
+	d = None
+	with open("filtered_obj_1.pkl", "r") as f_in:
+		d = pickle.load(f_in)
+
+	metropolis_hastings(d)
