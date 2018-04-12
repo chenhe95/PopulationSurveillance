@@ -129,25 +129,31 @@ def IMCMC(d, t):
 	lp = len(proposal)
 	for _ in xrange(iteration_N):
 
-		p_l_distribution = np.array([p_l(p[i][0], p[j][1]) for i in xrange(lp) for j in xrange(lp)])
-		p_l_distribution = p_l_distribution / sum(p_l_distribution)
-		p_l_values = [(i, j) for i in xrange(lp) for j in xrange(lp)]
-		sample_swap = np.random.choice(p_l_values, 1, p=p_l_distribution)
+		for i in xrange(lp):
+			p_l_distribution = np.array([p_l(p[i][0], p[j][1]) for j in xrange(lp)])
+			p_l_distribution = p_l_distribution / sum(p_l_distribution)
+			p_l_values = range(lp)
 
-		i, j = sample_swap
+			j = np.random.choice(p_l_values, 1, p=p_l_distribution)
 
-		rand = random.random()
-		if rand < GAMMA:
-			rand_2 = random.random()
-			alpha = a_ij(proposal, i, j)
+			rand = random.random()
+			if rand < GAMMA:
+				rand_2 = rando.random()
+				alpha = a_ij(proposal, i, j)
 
-			if rand_2 < alpha:
-				proposal = swap_proposal(proposal, i, j)
+				if rand_2 < alpha:
+					proposal = swap_proposal(proposal, i, j)
+				else:
+					# Sample a new swap using distribution (8)
+					# and accept with probability (9)
+					pass
+
 	return proposal			
 
 
 def metropolis_hastings(d):
 	max_time = len(d) - 1
+	proposals = [None for i in xrange(max_time)]
 
 	for t in xrange(max_time):
-		IMCMC(d, t)
+		proposals[t] = IMCMC(d, t)
