@@ -1,13 +1,13 @@
 from os import listdir
 from os.path import isfile, join
 import cv2
-
+import pickle
 from darkflow.net.build import TFNet
 
 threshold = 0.5
 
 options = { "model": "darkflow/cfg/yolo.cfg",
-	"load": "darkflow/yolo.weights", "threshold": threshold }
+	"load": "darkflow/yolo.weights", "threshold": threshold, "gpu": 1 }
 tfnet = TFNet(options)
 
 
@@ -59,11 +59,29 @@ def wrap_bounding_boxes(source_image, filtered_objects):
 
     return display_image
 
+def process_video(folder_index):
+	video_data = load_video(folder_index)
+	objects_t = []
+	for i in xrange(len(video_data)):
+		print "Processing " + str(i)
+		filtered_objs = tfnet.return_predict(video_data[i])
+		objects_t.append(filtered_objs)
 
-video_data = load_video(1)
-filtered_objs = tfnet.return_predict(video_data[50])
-displayed_image  = wrap_bounding_boxes(video_data[50], filtered_objs)
+	with open("filtered_obj_" + str(folder_index) + ".pkl", "w") as f_out:
+		pickle.dump(objects_t, f_out)
 
-cv2.imshow('Hit Key to Exit', displayed_image)
-cv2.waitKey(0)
-cv2.destroyAllWindows()
+if __name__ == "__main__":
+	# process_video(1)
+	process_video(3)
+	process_video(4)
+
+	process_video(5)
+
+	process_video(6)
+
+	process_video(7)
+
+	process_video(8)
+
+
+
