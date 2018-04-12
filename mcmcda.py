@@ -58,14 +58,16 @@ def mu(p1, p2):
 def p_pos(p1, p2):
 	x, y = get_centroid(p1)
 	a, b = get_centroid(p2)
-	print x, y, a, b, (x - a) ** 2 + (y - b) ** 2
 	return 1 / (math.sqrt((x - a) ** 2 + (y - b) ** 2) + DISTANCE_FACTOR)
 
 def p_l(p1, p2):
+	if p1 is None or p2 is None:
+		return 0
 	return mu(p1, p2) * p_pos(p1, p2)
 
 def psi(p1, p2):
-
+	if p1 is None or p2 is None:
+		return 1 - 1 / BETA
 	x, y = get_centroid(p1)
 	a, b = get_centroid(p2)
 
@@ -95,7 +97,6 @@ def p_g(proposal):
 	return psi_multiplicative_sum(proposal) * p_appearance_phi()
 
 def a_ij(proposal, i, j):
-	print i, j, proposal
 	local_score = p_l(proposal[i][0], proposal[j][1])
 	global_score = p_g(proposal)
 
@@ -136,6 +137,8 @@ def IMCMC(d, t):
 
 		for i in xrange(lp):
 			p_l_distribution = np.array([p_l(proposal[i][0], proposal[j][1]) for j in xrange(lp)])
+			if sum(p_l_distribution) == 0:
+				return proposal
 			p_l_distribution = p_l_distribution / sum(p_l_distribution)
 			p_l_values = range(lp)
 
@@ -163,9 +166,12 @@ def metropolis_hastings(d):
 	for t in xrange(max_time):
 		proposals[t] = IMCMC(d, t)
 
+	return proposals
+
 if __name__ == "__main__":
 	d = None
 	with open("filtered_obj_1.pkl", "r") as f_in:
 		d = pickle.load(f_in)
 
-	metropolis_hastings(d)
+	proposals = metropolis_hastings(d)
+	print proposals[0]
