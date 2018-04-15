@@ -3,16 +3,23 @@ import random
 import numpy as np
 import pickle
 
+from obj_tracking import generate_video
+
 IMG_WIDTH = 768
 IMG_HEIGHT = 576
 
 IMAGE_DIAG = math.sqrt(IMG_HEIGHT ** 2 + IMG_WIDTH ** 2)
 
-INTERACTION_VARIANCE = 100 ** 2
-DISTANCE_FACTOR = 25
-GAMMA = 0.2
-BETA = 1
+INTERACTION_VARIANCE = 100 ** 2 # 100 ** 2 in paper
+DISTANCE_FACTOR = 2 # 25
+GAMMA = 1 # 0.2 in paper
+BETA = 1 # 1 in paper
 PHI = 1
+
+MH_ITER_N = 100
+
+def person_equals(obj1, obj2):
+	return obj1["topleft"] == obj2["topleft"] and obj1["bottomright"] == obj2["bottomright"] and obj1["label"] == "person" and obj2["label"] == "person"
 
 def get_bounding_box(obj):
 	# FORMAT
@@ -45,8 +52,12 @@ def area_intersection(obj1, obj2):
 	x1, y1, x2, y2 = bounding_box_intersection(obj1, obj2)
 	return area_bounding_box(x1, y1, x2, y2)
 
+def soft_area_intersection(obj1, obj2):
+	x1, y1, x2, y2 = bounding_box_intersection(obj1, obj2)
+	return max(1, area_bounding_box(x1, y1, x2, y2))
+
 def mu(p1, p2):
-	a_i = area_intersection(p1, p2)
+	a_i = soft_area_intersection(p1, p2)
 	x1, y1, x2, y2 = get_bounding_box(p1)
 	a1, b1, a2, b2 = get_bounding_box(p2)
 
@@ -58,7 +69,8 @@ def mu(p1, p2):
 def p_pos(p1, p2):
 	x, y = get_centroid(p1)
 	a, b = get_centroid(p2)
-	return 1 / (math.sqrt((x - a) ** 2 + (y - b) ** 2) + DISTANCE_FACTOR)
+	# return 1 / (math.sqrt((x - a) ** 2 + (y - b) ** 2) + DISTANCE_FACTOR)
+	return psi(p1, p2)
 
 def p_l(p1, p2):
 	if p1 is None or p2 is None:
@@ -96,12 +108,25 @@ def swap_proposal(proposal, i, j):
 def p_g(proposal):
 	return psi_multiplicative_sum(proposal) * p_appearance_phi()
 
+def a_ij_local(proposal, i, j):
+	local_score_old = p_l(proposal[i][0], proposal[i][1])
+	local_score_new = p_l(proposal[i][0], proposal[j][1])
+
+	if local_score_old == 0: 
+		if local_score_new > 0.0000001:
+			return local_score_new
+		return 0
+
+	return local_score_new / local_score_old
+
 def a_ij(proposal, i, j):
 	local_score = p_l(proposal[i][0], proposal[j][1])
 	global_score = p_g(proposal)
 
 	if abs(global_score + local_score) < 10e-10:
 		return 0
+
+	print "global score, local score = ", str(global_score), ", ", str(local_score)
 
 	return global_score / (global_score + local_score)
 
@@ -131,7 +156,7 @@ def generate_random_proposal(d, i, j):
 
 def IMCMC(d, t):
 	proposal = generate_random_proposal(d, t, t + 1)
-	iteration_N = 100
+	iteration_N = MH_ITER_N
 	lp = len(proposal)
 	for _ in xrange(iteration_N):
 
@@ -158,20 +183,48 @@ def IMCMC(d, t):
 
 	return proposal			
 
+def IMCMC_local(d, t):
+	proposal = generate_random_proposal(d, t, t + 1)
+	iteration_N = MH_ITER_N
+	lp = len(proposal)
+	for _ in xrange(iteration_N):
+		p_l_distribution = -np.array([p_l(proposal[i][0], proposal[j][1]) for j in xrange(lp) for i in xrange(lp)]) + 1.0
+		if sum(p_l_distribution) == 0:
+			return proposal
+
+		p_l_distribution = p_l_distribution / sum(p_l_distribution)
+
+		p_l_values = [[i, j] for j in xrange(lp) for i in xrange(lp)]
+
+		swap_selection = np.random.choice(range(len(p_l_values)), 1, p=p_l_distribution)[0]
+		i, j = p_l_values[swap_selection][0], p_l_values[swap_selection][1]
+		rand = random.random()
+		alpha = a_ij_local(proposal, i, j)
+		if rand < alpha:
+			proposal = swap_proposal(proposal, i, j)
+
+	return proposal		
+
 
 def metropolis_hastings(d):
 	max_time = len(d) - 1
 	proposals = [None for i in xrange(max_time)]
 
 	for t in xrange(max_time):
-		proposals[t] = IMCMC(d, t)
+		proposals[t] = IMCMC_local(d, t)
 
 	return proposals
 
 if __name__ == "__main__":
 	d = None
-	with open("filtered_obj_1.pkl", "r") as f_in:
+	with open("filtered_obj_1_25.pkl", "r") as f_in:
 		d = pickle.load(f_in)
 
 	proposals = metropolis_hastings(d)
+
+	print "Finished computing metropolis hastings"
+
 	print proposals[0]
+	print proposals[1]
+
+	generate_video(proposals, 1, "vid_test.avi")
