@@ -16,7 +16,7 @@ GAMMA = 1 # 0.2 in paper
 BETA = 1 # 1 in paper
 PHI = 1
 
-MH_ITER_N = 100
+MH_ITER_N = 1000
 
 def person_equals(obj1, obj2):
 	return obj1["topleft"] == obj2["topleft"] and obj1["bottomright"] == obj2["bottomright"] and obj1["label"] == "person" and obj2["label"] == "person"
@@ -79,7 +79,7 @@ def p_l(p1, p2):
 
 def psi(p1, p2):
 	if p1 is None or p2 is None:
-		return 1 - 1 / BETA
+		return 1 # before 1 - 1 / BETA
 	x, y = get_centroid(p1)
 	a, b = get_centroid(p2)
 
@@ -108,9 +108,35 @@ def swap_proposal(proposal, i, j):
 def p_g(proposal):
 	return psi_multiplicative_sum(proposal) * p_appearance_phi()
 
+def copy_proposal(proposal):
+	new_proposal = [[proposal[i][0], proposal[i][1]] for i in xrange(len(proposal))]
+	return new_proposal
+
+def dist_metric_l2(p1, p2):
+	return math.sqrt((p1[0] - p2[0]) ** 2 + (p1[1] - p2[1]) ** 2)
+
+def dist_metric_gaussian(p1, p2, variance=INTERACTION_VARIANCE):
+	return 1 / math.sqrt(2 * math.pi) * math.exp(dist_metric_l2(p1, p2) / variance)
+
+def dist_metric_exp(p1, p2):
+	return math.exp(dist_metric_l2(p1, p2) / INTERACTION_VARIANCE)
+
 def a_ij_local(proposal, i, j):
 	local_score_old = p_l(proposal[i][0], proposal[i][1])
 	local_score_new = p_l(proposal[i][0], proposal[j][1])
+
+	if local_score_old == 0: 
+		if local_score_new > 0.0000001:
+			return local_score_new
+		return 0
+
+	return local_score_new / local_score_old
+
+def a_ij_global(proposal, i, j):
+	local_score_old = p_g(proposal)
+	c_proposal = copy_proposal(proposal)
+	c_proposal = swap_proposal(c_proposal, i, j)
+	local_score_new = p_g(c_proposal)
 
 	if local_score_old == 0: 
 		if local_score_new > 0.0000001:
@@ -129,6 +155,89 @@ def a_ij(proposal, i, j):
 	print "global score, local score = ", str(global_score), ", ", str(local_score)
 
 	return global_score / (global_score + local_score)
+
+
+def a_ij_dist(proposal, i, j, dist_metric):
+	current_score = 0
+	proposal_score = 0
+
+	c_proposal = copy_proposal(proposal)
+	c_proposal = swap_proposal(c_proposal, i, j)
+
+	for p in proposal:
+
+		if p[0] is None or p[1] is None:
+			continue
+
+		x1, y1 = get_centroid(p[0])
+		x2, y2 = get_centroid(p[1])
+
+		current_score = current_score + dist_metric((x1, y1), (x2, y2))
+
+	for p in c_proposal:
+
+		if p[0] is None or p[1] is None:
+			continue
+
+		x1, y1 = get_centroid(p[0])
+		x2, y2 = get_centroid(p[1])
+
+		proposal_score = proposal_score + dist_metric((x1, y1), (x2, y2))
+
+	if proposal_score < 0.0000000001:
+		return 1
+
+	return current_score / proposal_score
+
+def a_ij_y(proposal, i, j):
+	current_score = 0
+	proposal_score = 0
+
+	c_proposal = copy_proposal(proposal)
+	c_proposal = swap_proposal(c_proposal, i, j)
+
+	if proposal[i][0] is None or proposal[j][1] is None:
+		return 0.5 # ???
+
+	x1, y1 = get_centroid(proposal[i][0])
+	x2, y2 = get_centroid(proposal[j][1])
+
+	current_score = dist_metric_l2((x1, y1), (x2, y2))
+
+	for p in c_proposal:
+
+		if p[0] is None or p[1] is None:
+			continue
+
+		x1, y1 = get_centroid(p[0])
+		x2, y2 = get_centroid(p[1])
+
+		proposal_score = proposal_score + dist_metric_l2((x1, y1), (x2, y2))
+
+	if proposal_score < 0.0000000001:
+		return 1
+
+	return 1 - current_score / proposal_score
+
+def a_ij_hardcap(proposal, i, j, hardcap = 30):
+	current_score = 0
+	proposal_score = 0
+
+	c_proposal = copy_proposal(proposal)
+	c_proposal = swap_proposal(c_proposal, i, j)
+
+	if proposal[i][0] is None or proposal[j][1] is None:
+		return 0.5 # ???
+
+	x1, y1 = get_centroid(proposal[i][0])
+	x2, y2 = get_centroid(proposal[j][1])
+
+	current_score = dist_metric_l2((x1, y1), (x2, y2))
+
+	if current_score >= hardcap:
+		return 0
+
+	return a_ij_dist(proposal, i, j, dist_metric_exp)
 
 def filter_people(di):
 	return filter(lambda x: x["label"] == "person", di)
@@ -205,13 +314,120 @@ def IMCMC_local(d, t):
 
 	return proposal		
 
+def IMCMC_global(d, t):
+	proposal = generate_random_proposal(d, t, t + 1)
+	iteration_N = MH_ITER_N
+	lp = len(proposal)
+	for _ in xrange(iteration_N):
+		p_l_distribution = -np.array([p_l(proposal[i][0], proposal[j][1]) for j in xrange(lp) for i in xrange(lp)]) + 1.0
+		if sum(p_l_distribution) == 0:
+			return proposal
+
+		p_l_distribution = p_l_distribution / sum(p_l_distribution)
+
+		p_l_values = [[i, j] for j in xrange(lp) for i in xrange(lp)]
+
+		swap_selection = np.random.choice(range(len(p_l_values)), 1, p=p_l_distribution)[0]
+		i, j = p_l_values[swap_selection][0], p_l_values[swap_selection][1]
+		rand = random.random()
+		alpha = a_ij_global(proposal, i, j)
+		if rand < alpha:
+			proposal = swap_proposal(proposal, i, j)
+
+	return proposal		
+
+
+def IMCMC_dist(d, t):
+	proposal = generate_random_proposal(d, t, t + 1)
+	iteration_N = MH_ITER_N
+	lp = len(proposal)
+	for _ in xrange(iteration_N):
+		# p_l_distribution = -np.array([p_l(proposal[i][0], proposal[j][1]) for j in xrange(lp) for i in xrange(lp)]) + 1.0
+
+		p_l_distribution = np.array([1.0 / len(proposal) for j in xrange(lp) for i in xrange(lp)]) 
+
+		if sum(p_l_distribution) == 0:
+			return proposal
+
+		p_l_distribution = p_l_distribution / sum(p_l_distribution)
+
+		p_l_values = [[i, j] for j in xrange(lp) for i in xrange(lp)]
+
+		swap_selection = np.random.choice(range(len(p_l_values)), 1, p=p_l_distribution)[0]
+		i, j = p_l_values[swap_selection][0], p_l_values[swap_selection][1]
+		rand = random.random()
+		alpha = a_ij_dist(proposal, i, j, dist_metric_exp)
+
+		# print alpha
+
+		if rand < alpha:
+			proposal = swap_proposal(proposal, i, j)
+
+	return proposal		
+
+def IMCMC_dist_y(d, t):
+	proposal = generate_random_proposal(d, t, t + 1)
+	iteration_N = MH_ITER_N
+	lp = len(proposal)
+	for _ in xrange(iteration_N):
+		# p_l_distribution = -np.array([p_l(proposal[i][0], proposal[j][1]) for j in xrange(lp) for i in xrange(lp)]) + 1.0
+
+		p_l_distribution = np.array([1.0 / len(proposal) for j in xrange(lp) for i in xrange(lp)]) 
+
+		if sum(p_l_distribution) == 0:
+			return proposal
+
+		p_l_distribution = p_l_distribution / sum(p_l_distribution)
+
+		p_l_values = [[i, j] for j in xrange(lp) for i in xrange(lp)]
+
+		swap_selection = np.random.choice(range(len(p_l_values)), 1, p=p_l_distribution)[0]
+		i, j = p_l_values[swap_selection][0], p_l_values[swap_selection][1]
+		rand = random.random()
+		alpha = a_ij_y(proposal, i, j)
+
+		# print alpha
+
+		if rand < alpha:
+			proposal = swap_proposal(proposal, i, j)
+
+	return proposal		
+
+def IMCMC_hardcap(d, t):
+	proposal = generate_random_proposal(d, t, t + 1)
+	iteration_N = MH_ITER_N
+	lp = len(proposal)
+	for _ in xrange(iteration_N):
+		# p_l_distribution = -np.array([p_l(proposal[i][0], proposal[j][1]) for j in xrange(lp) for i in xrange(lp)]) + 1.0
+
+		p_l_distribution = np.array([1.0 / len(proposal) for j in xrange(lp) for i in xrange(lp)]) 
+
+		if sum(p_l_distribution) == 0:
+			return proposal
+
+		p_l_distribution = p_l_distribution / sum(p_l_distribution)
+
+		p_l_values = [[i, j] for j in xrange(lp) for i in xrange(lp)]
+
+		swap_selection = np.random.choice(range(len(p_l_values)), 1, p=p_l_distribution)[0]
+		i, j = p_l_values[swap_selection][0], p_l_values[swap_selection][1]
+		rand = random.random()
+		alpha = a_ij_hardcap(proposal, i, j)
+
+		# print alpha
+
+		if rand < alpha:
+			proposal = swap_proposal(proposal, i, j)
+
+	return proposal		
+
 
 def metropolis_hastings(d):
 	max_time = len(d) - 1
 	proposals = [None for i in xrange(max_time)]
 
 	for t in xrange(max_time):
-		proposals[t] = IMCMC_local(d, t)
+		proposals[t] = IMCMC_hardcap(d, t)
 
 	return proposals
 
