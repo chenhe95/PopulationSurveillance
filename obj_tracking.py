@@ -2,6 +2,7 @@ from os import listdir
 from os.path import isfile, join
 import cv2
 import pickle
+import math
 
 def load_video(folder_index):
     def list_image_files(folder_index):
@@ -79,6 +80,8 @@ def generate_video(proposals, folder_index, video_name):
     fourcc = cv2.VideoWriter_fourcc(*'DIVX')
     video = cv2.VideoWriter(video_name, fourcc, 10, (width, height))
 
+    line_lens = []
+
     for t in xrange(len(proposals)):
         filtered_objs = [s[0] for s in proposals[t] if s[0] is not None]
         frame = wrap_bounding_boxes(video_data[t], filtered_objs)
@@ -93,13 +96,20 @@ def generate_video(proposals, folder_index, video_name):
             x_e, y_e = (end["topleft"]["x"] + end["bottomright"]["x"]) / 2, (end["topleft"]["y"] + end["bottomright"]["y"]) / 2  
             cv2.line(frame, (x_s, y_s), (x_e, y_e), (70, 120, 70), 4)
 
+            line_lens.append(str(math.sqrt((x_s - x_e) ** 2 + (y_s - y_e) ** 2)))
+
         video.write(frame)
 
     cv2.destroyAllWindows()
     video.release()
 
+    with open("lin_len_data.txt", "w") as f_out:
+        f_out.write(",".join(line_lens))
+
+
 if __name__ == "__main__":
-    process_video(1)
+    pass
+    # process_video(1)
     # process_video(3)
     # process_video(4)
     # process_video(5)

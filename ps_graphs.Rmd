@@ -1,0 +1,34 @@
+---
+title: "PS Graphs"
+author: "He Chen - hechen@seas.upenn.edu"
+date: "May 1, 2018"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r, warning = FALSE, echo = FALSE}
+dat_l2 <- as.double(t(read.table("lin_len_data_l2_vanilla.txt", header = FALSE, sep = ",")))
+hist(dat_l2, main = "Squared Error Heuristic", xlab = "Matching Lengths")
+```
+
+```{r, warning = FALSE, echo = FALSE}
+dat_l2 <- as.double(t(read.table("lin_len_data_l2_max_allowed_dist.txt", header = FALSE, sep = ",")))
+hist(dat_l2, main = "Squared Error Heuristic - Maximum Allowed Distance", xlab = "Matching Lengths")
+```
+
+
+```{r, warning = FALSE, echo = FALSE}
+dat_l2 <- as.double(t(read.table("lin_len_data_local.txt", header = FALSE, sep = ",")))
+hist(dat_l2, main = "Local Particle Filter", xlab = "Matching Lengths")
+```
+
+```{r, warning = FALSE, echo = FALSE}
+dat_l2 <- as.double(t(read.table("lin_len_data_global.txt", header = FALSE, sep = ",")))
+hist(dat_l2, main = "Global Particle Filter", xlab = "Matching Lengths")
+```
+
+```{r, warning = FALSE, echo = FALSE}
+dat_l2 <- as.double(t(read.table("lin_len_data_combined.txt", header = FALSE, sep = ",")))
+hist(dat_l2, main = "Local + Global Particle Filter, Interaction Mode", xlab = "Matching Lengths")
+```

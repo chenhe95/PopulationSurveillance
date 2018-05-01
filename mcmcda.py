@@ -16,7 +16,7 @@ GAMMA = 1 # 0.2 in paper
 BETA = 1 # 1 in paper
 PHI = 1
 
-MH_ITER_N = 1000
+MH_ITER_N = 1500
 
 def person_equals(obj1, obj2):
 	return obj1["topleft"] == obj2["topleft"] and obj1["bottomright"] == obj2["bottomright"] and obj1["label"] == "person" and obj2["label"] == "person"
@@ -74,7 +74,7 @@ def p_pos(p1, p2):
 
 def p_l(p1, p2):
 	if p1 is None or p2 is None:
-		return 0
+		return 0.5
 	return mu(p1, p2) * p_pos(p1, p2)
 
 def psi(p1, p2):
@@ -150,9 +150,9 @@ def a_ij(proposal, i, j):
 	global_score = p_g(proposal)
 
 	if abs(global_score + local_score) < 10e-10:
-		return 0
+		return 0.5
 
-	print "global score, local score = ", str(global_score), ", ", str(local_score)
+	# print "global score, local score = ", str(global_score), ", ", str(local_score)
 
 	return global_score / (global_score + local_score)
 
@@ -297,7 +297,7 @@ def IMCMC_local(d, t):
 	iteration_N = MH_ITER_N
 	lp = len(proposal)
 	for _ in xrange(iteration_N):
-		p_l_distribution = -np.array([p_l(proposal[i][0], proposal[j][1]) for j in xrange(lp) for i in xrange(lp)]) + 1.0
+		p_l_distribution = np.array([1.0 / len(proposal) for j in xrange(lp) for i in xrange(lp)]) 
 		if sum(p_l_distribution) == 0:
 			return proposal
 
@@ -319,7 +319,7 @@ def IMCMC_global(d, t):
 	iteration_N = MH_ITER_N
 	lp = len(proposal)
 	for _ in xrange(iteration_N):
-		p_l_distribution = -np.array([p_l(proposal[i][0], proposal[j][1]) for j in xrange(lp) for i in xrange(lp)]) + 1.0
+		p_l_distribution = np.array([1.0 / len(proposal) for j in xrange(lp) for i in xrange(lp)]) 
 		if sum(p_l_distribution) == 0:
 			return proposal
 
@@ -335,6 +335,41 @@ def IMCMC_global(d, t):
 			proposal = swap_proposal(proposal, i, j)
 
 	return proposal		
+
+def IMCMC_combined(d, t):
+	proposal_local = generate_random_proposal(d, t, t + 1)
+	proposal_global = generate_random_proposal(d, t, t + 1)
+	iteration_N = MH_ITER_N
+	lp = len(proposal_local)
+	for _ in xrange(iteration_N):
+		p_l_distribution = np.array([1.0 / len(proposal_local) for j in xrange(lp) for i in xrange(lp)]) 
+		if sum(p_l_distribution) == 0:
+			return proposal_local
+
+		p_l_distribution = p_l_distribution / sum(p_l_distribution)
+
+		p_l_values = [[i, j] for j in xrange(lp) for i in xrange(lp)]
+
+		swap_selection = np.random.choice(range(len(p_l_values)), 1, p=p_l_distribution)[0]
+		i, j = p_l_values[swap_selection][0], p_l_values[swap_selection][1]
+		rand = random.random()
+		alpha = a_ij_local(proposal_local, i, j)
+		if rand < alpha:
+			proposal_local = swap_proposal(proposal_local, i, j)
+
+		swap_selection = np.random.choice(range(len(p_l_values)), 1, p=p_l_distribution)[0]
+		i, j = p_l_values[swap_selection][0], p_l_values[swap_selection][1]
+		rand = random.random()
+		alpha = a_ij_global(proposal_global, i, j)
+		if rand < alpha:
+			proposal_global = swap_proposal(proposal_global, i, j)
+
+		rand = random.random()
+		if rand < a_ij(proposal_local, i, j):
+			proposal_local = proposal_global
+
+	return proposal_local
+
 
 
 def IMCMC_dist(d, t):
@@ -356,7 +391,7 @@ def IMCMC_dist(d, t):
 		swap_selection = np.random.choice(range(len(p_l_values)), 1, p=p_l_distribution)[0]
 		i, j = p_l_values[swap_selection][0], p_l_values[swap_selection][1]
 		rand = random.random()
-		alpha = a_ij_dist(proposal, i, j, dist_metric_exp)
+		alpha = a_ij_dist(proposal, i, j, dist_metric_l2)
 
 		# print alpha
 
@@ -427,7 +462,7 @@ def metropolis_hastings(d):
 	proposals = [None for i in xrange(max_time)]
 
 	for t in xrange(max_time):
-		proposals[t] = IMCMC_hardcap(d, t)
+		proposals[t] = IMCMC_combined(d, t)
 
 	return proposals
 
