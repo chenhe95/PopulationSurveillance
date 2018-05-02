@@ -9,26 +9,41 @@ output:
 
 ```{r, warning = FALSE, echo = FALSE}
 dat_l2 <- as.double(t(read.table("lin_len_data_l2_vanilla.txt", header = FALSE, sep = ",")))
-hist(dat_l2, main = "Squared Error Heuristic", xlab = "Matching Lengths")
+summary(dat_l2)
+dat_l2_plot <- dat_l2[which(dat_l2 <= 300)]
+hist(dat_l2_plot, main = "Squared Error Heuristic", xlab = "Matching Lengths", xlim = c(0, 300), breaks=12)
 ```
 
 ```{r, warning = FALSE, echo = FALSE}
-dat_l2 <- as.double(t(read.table("lin_len_data_l2_max_allowed_dist.txt", header = FALSE, sep = ",")))
-hist(dat_l2, main = "Squared Error Heuristic - Maximum Allowed Distance", xlab = "Matching Lengths")
+dat_l2_mad <- as.double(t(read.table("lin_len_data_l2_max_allowed_dist.txt", header = FALSE, sep = ",")))
+summary(dat_l2_mad)
+dat_l2_mad_plot <- dat_l2_mad[which(dat_l2_mad <= 300)]
+hist(dat_l2_mad_plot, main = "Squared Error Heuristic - Maximum Allowed Distance", xlab = "Matching Lengths", xlim = c(0, 300), breaks=12)
 ```
 
 
 ```{r, warning = FALSE, echo = FALSE}
-dat_l2 <- as.double(t(read.table("lin_len_data_local.txt", header = FALSE, sep = ",")))
-hist(dat_l2, main = "Local Particle Filter", xlab = "Matching Lengths")
+dat_pf <- as.double(t(read.table("lin_len_data_local.txt", header = FALSE, sep = ",")))
+summary(dat_pf)
+dat_pf_plot <- dat_pf[which(dat_pf <= 300)]
+hist(dat_pf_plot, main = "Local Particle Filter", xlab = "Matching Lengths", xlim = c(0, 300), breaks = 12)
 ```
 
 ```{r, warning = FALSE, echo = FALSE}
-dat_l2 <- as.double(t(read.table("lin_len_data_global.txt", header = FALSE, sep = ",")))
-hist(dat_l2, main = "Global Particle Filter", xlab = "Matching Lengths")
+dat_gf <- as.double(t(read.table("lin_len_data_global_v3.txt", header = FALSE, sep = ",")))
+summary(dat_gf)
+dat_gf_plot <- dat_gf[which(dat_gf <= 300)]
+hist(dat_gf_plot, main = "Global Particle Filter", xlab = "Matching Lengths", xlim = c(0, 300), breaks=12)
 ```
 
 ```{r, warning = FALSE, echo = FALSE}
-dat_l2 <- as.double(t(read.table("lin_len_data_combined.txt", header = FALSE, sep = ",")))
-hist(dat_l2, main = "Local + Global Particle Filter, Interaction Mode", xlab = "Matching Lengths")
+dat_c <- as.double(t(read.table("lin_len_data_combined_v3.txt", header = FALSE, sep = ",")))
+summary(dat_c)
+dat_c_plot <- dat_c[which(dat_c <= 300)]
+hist(dat_c_plot, main = "Local + Global Particle Filter, Interactive Mode", xlab = "Matching Lengths", xlim = c(0, 300), breaks=12)
+```
+
+```{r, warning = FALSE, echo = FALSE}
+bp_df <- data.frame("SEH" = dat_l2, "SEH-MAD" = dat_l2_mad, "Combined" = dat_c, "Global-Filter" = dat_gf, "Local-Filter" = dat_pf)
+boxplot(bp_df, use.cols = TRUE)
 ```

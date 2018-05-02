@@ -82,8 +82,9 @@ def psi(p1, p2):
 		return 1 # before 1 - 1 / BETA
 	x, y = get_centroid(p1)
 	a, b = get_centroid(p2)
-
-	return 1 - (1 / BETA) * math.exp(-((x - a) ** 2 + (y - b) ** 2) / INTERACTION_VARIANCE)
+	# paper return 1 - (1 / BETA) * math.exp(-((x - a) ** 2 + (y - b) ** 2) / INTERACTION_VARIANCE)
+	# return 1 - (1 / BETA) * math.exp(((x - a) ** 2 + (y - b) ** 2) / INTERACTION_VARIANCE)
+	return (1 / BETA) * math.exp(-((x - a) ** 2 + (y - b) ** 2) / INTERACTION_VARIANCE)
 
 def psi_multiplicative_sum(proposal):
 	# PROPOSAL FORMAT
@@ -462,7 +463,7 @@ def metropolis_hastings(d):
 	proposals = [None for i in xrange(max_time)]
 
 	for t in xrange(max_time):
-		proposals[t] = IMCMC_combined(d, t)
+		proposals[t] = IMCMC_global(d, t)
 
 	return proposals
 
